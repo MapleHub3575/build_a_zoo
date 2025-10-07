@@ -1,40 +1,135 @@
--- รอเกมโหลดก่อน 5 วินาที
-task.delay(5, function()
-    local Players = game:GetService("Players")
-    local TeleportService = game:GetService("TeleportService")
-    local DataStoreService = game:GetService("DataStoreService")
-    local HttpService = game:GetService("HttpService")
-    local LocalPlayer = Players.LocalPlayer
+-- โหลด Rayfield UI
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+local LocalPlayer = Players.LocalPlayer
 
-    -- สร้าง DataStore สำหรับ Config
-    local ConfigStore = DataStoreService:GetDataStore("MapleHubConfig")
+-- Config เริ่มต้น
+local Config = {
+    AutoFarm = true,
+    FarmDelay = 15, -- วินาที
+    AutoRejoin = true,
+    RejoinDelay = 5 -- วินาที
+}
 
-    -- โหลด Rayfield UI
-    local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+-- สร้างหน้าต่าง Rayfield
+local Window = Rayfield:CreateWindow({
+    Name = "Maple Hub",
+    LoadingTitle = "Maple Hub Loading...",
+    LoadingSubtitle = "by Maple_D",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "MapleHub",
+        FileName = "MapleConfig"
+    },
+    Discord = { Enabled = false }
+})
 
-    -- Config เริ่มต้น
-    local Config = {
-        AutoFarm = false,
-        FarmDelay = 15,
-        AutoRejoin = false,
-        RejoinDelay = 5
-    }
+-- 🌾 Farm Tab
+local FarmTab = Window:CreateTab("🌾 Farm", 4483362458)
+local AutoFarmSection = FarmTab:CreateSection("Auto Farm Settings")
 
-    -- ฟังก์ชันโหลด Config จาก DataStore
-    local function LoadConfig()
-        local success, data = pcall(function()
-            return ConfigStore:GetAsync(LocalPlayer.UserId)
-        end)
-        if success and data then
-            for k,v in pairs(data) do
-                if Config[k] ~= nil then
-                    Config[k] = v
-                end
-            end
-            print("Config Loaded")
-        else
-            print("No saved Config or failed to load")
-        end
+-- Toggle Auto Farm
+FarmTab:CreateToggle({
+    Name = "Auto Farm",
+    CurrentValue = false,
+    Flag = "AutoFarm",
+    Callback = function(Value)
+        Config.AutoFarm = Value
+        print("Auto Farm " .. (Value and "On" or "Off"))
+    end,
+})
+
+-- Slider Delay Farm
+FarmTab:CreateSlider({
+    Name = "Delay Farm",
+    Range = {0.1, 100},
+    Increment = 1,
+    Suffix = "s",
+    CurrentValue = Config.FarmDelay,
+    Flag = "FarmDelay",
+    Callback = function(Value)
+        Config.FarmDelay = Value
+        print("Delay Farm = " .. Value .. "s")
+    end,
+})
+
+-- ⚙ Main Tab
+local MainTab = Window:CreateTab("⚙ Main", 4483362458)
+local AutoRejoinSection = MainTab:CreateSection("Auto Rejoin Settings")
+
+-- Toggle Auto Rejoin
+MainTab:CreateToggle({
+    Name = "Auto Rejoin",
+    CurrentValue = false,
+    Flag = "AutoRejoin",
+    Callback = function(Value)
+        Config.AutoRejoin = Value
+        print("Auto Rejoin " .. (Value and "On" or "Off"))
+    end,
+})
+
+-- Slider Rejoin Delay
+MainTab:CreateSlider({
+    Name = "Rejoin Delay",
+    Range = {1, 30},
+    Increment = 1,
+    Suffix = "s",
+    CurrentValue = Config.RejoinDelay,
+    Flag = "RejoinDelay",
+    Callback = function(Value)
+        Config.RejoinDelay = Value
+        print("Rejoin Delay = " .. Value .. "s")
+    end,
+})
+
+-- ฟังก์ชันรอโฟลเดอร์ Pets
+local function WaitForPetsFolder()
+    return workspace:WaitForChild("Pets")
+end
+
+-- Auto Farm Logic (เก็บ Pets)
+task.spawn(function()
+    local petsFolder = WaitForPetsFolder()
+    while true do
+        if Config.AutoFarm then
+            for _, pet in pairs(petsFolder:GetChildren()) do
+                local root = pet:FindFirstChild("RootPart")
+                if root then
+                    local remote = root:FindFirstChild("RE")
+                    if remote and remote:IsA("RemoteEvent") then
+                        pcall(function()
+                            remote:FireServer("Claim")
+                        end)
+                    end
+                end
+            end
+            task.wait(Config.FarmDelay)
+        else
+            task.wait(1)
+        end
+    end
+end)
+
+-- ฟังก์ชันรอ PromptGui
+local function WaitForPromptGui()
+    return game:GetService("CoreGui"):WaitForChild("PromptGui")
+end
+
+-- Auto Rejoin Logic
+task.spawn(function()
+    local promptGui = WaitForPromptGui()
+    promptGui.promptOverlay.ChildAdded:Connect(function(obj)
+        if obj.Name == "ErrorPrompt" and Config.AutoRejoin then
+            task.spawn(function()
+                task.wait(Config.RejoinDelay)
+                pcall(function()
+                    TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+                end)
+            end)
+        end
+    end)
+end)        end
     end
 
     -- ฟังก์ชันเซฟ Config ลง DataStore
